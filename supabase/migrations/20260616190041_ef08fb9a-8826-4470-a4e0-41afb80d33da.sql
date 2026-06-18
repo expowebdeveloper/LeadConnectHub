@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.log_presence_event() FROM PUBLIC, anon, authenticated;

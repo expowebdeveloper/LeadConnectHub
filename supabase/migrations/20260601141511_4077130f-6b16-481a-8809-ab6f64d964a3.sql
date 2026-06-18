@@ -1,0 +1,1 @@
+ALTER TABLE public.leads ADD COLUMN date_of_birth date;

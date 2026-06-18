@@ -1,0 +1,1 @@
+ALTER TABLE public.leads ADD COLUMN optin_proof_path text;

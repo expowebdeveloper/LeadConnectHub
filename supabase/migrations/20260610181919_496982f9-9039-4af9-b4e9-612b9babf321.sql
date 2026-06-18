@@ -1,0 +1,1 @@
+ALTER TYPE public.lead_type ADD VALUE IF NOT EXISTS 'rv';

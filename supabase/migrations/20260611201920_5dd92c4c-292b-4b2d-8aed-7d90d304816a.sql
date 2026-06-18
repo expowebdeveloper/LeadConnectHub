@@ -1,0 +1,2 @@
+ALTER TABLE public.profiles DROP CONSTRAINT profiles_manual_status_check;
+ALTER TABLE public.profiles ADD CONSTRAINT profiles_manual_status_check CHECK (manual_status IS NULL OR manual_status = ANY (ARRAY['available','lunch','break','meeting','dnd','offline','idle']));

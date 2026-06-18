@@ -1,0 +1,1 @@
+ALTER TYPE public.lead_dispo ADD VALUE IF NOT EXISTS 'dnc';

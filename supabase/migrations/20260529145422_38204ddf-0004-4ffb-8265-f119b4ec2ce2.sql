@@ -1,0 +1,1 @@
+TRUNCATE TABLE public.dnc_cache;

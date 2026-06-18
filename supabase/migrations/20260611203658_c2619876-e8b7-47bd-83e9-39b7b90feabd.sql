@@ -1,0 +1,2 @@
+ALTER TABLE public.sale_events DROP CONSTRAINT sale_events_side_check;
+ALTER TABLE public.sale_events ADD CONSTRAINT sale_events_side_check CHECK (side = ANY (ARRAY['auto','home','motorcycle','boat','umbrella','flood','golf_cart','rv']));

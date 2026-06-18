@@ -1,0 +1,1 @@
+ALTER TABLE public.profiles ADD COLUMN bypass_dnc boolean NOT NULL DEFAULT false;

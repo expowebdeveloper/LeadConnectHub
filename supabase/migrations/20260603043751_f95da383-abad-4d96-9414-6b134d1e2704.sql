@@ -1,0 +1,1 @@
+DELETE FROM public.list_leads WHERE import_batch_id = 'f5c8f721-fc5c-45d4-a1a3-14f8e6ecb34f';

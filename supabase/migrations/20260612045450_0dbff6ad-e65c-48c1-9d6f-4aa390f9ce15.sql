@@ -1,0 +1,1 @@
+ALTER TABLE public.list_leads ADD COLUMN IF NOT EXISTS auto_archive jsonb;
