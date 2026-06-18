@@ -7,6 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DISPO_OPTIONS, type Dispo } from "@/lib/constants";
+import { dispoRequiresPremium } from "@/lib/closeGuard";
 import { useDispoOptions } from "@/hooks/useDispoOptions";
 import { toast } from "sonner";
 import { X, Archive, CalendarClock } from "lucide-react";
@@ -50,6 +51,8 @@ export function BulkActionBar({ table, selectedIds, selectedClaimMap, onClear, a
   // nothing.
   const [followSide, setFollowSide] = useState<"auto" | "home" | "both">("both");
   const [confirmReleaseSoldCount, setConfirmReleaseSoldCount] = useState<number | null>(null);
+  const [pendingPremiumDispo, setPendingPremiumDispo] = useState<Dispo | null>(null);
+  const [premiumAmount, setPremiumAmount] = useState<string>("");
 
   const buildClaimPatch = () => ({
     claimed_by: currentUserId,
@@ -152,7 +155,7 @@ export function BulkActionBar({ table, selectedIds, selectedClaimMap, onClear, a
   };
 
   const dispoM = useMutation({
-    mutationFn: async (d: Dispo) => {
+    mutationFn: async ({ d, premium }: { d: Dispo; premium?: number }) => {
       // Bulk-setting follow_up or x_date without a date silently strands the
       // lead off everyone's calendar. The popover next to this control
       // captures the date — point the user there instead.
@@ -165,11 +168,15 @@ export function BulkActionBar({ table, selectedIds, selectedClaimMap, onClear, a
       if (!isAdmin) await claimUnclaimedSelections();
       // The early-returns above guarantee d is neither follow_up nor x_date,
       // so always clear both scheduled date columns.
-      const updated = await runOnBoth({
+      const patch: Record<string, unknown> = {
         dispo: d,
         follow_up_at: null,
         x_date: null,
-      });
+      };
+      if (premium !== undefined) {
+        patch.quoted_premium = premium;
+      }
+      const updated = await runOnBoth(patch);
       if (updated === 0) throw new Error("No selected leads were updated.");
       return updated;
     },
@@ -177,10 +184,33 @@ export function BulkActionBar({ table, selectedIds, selectedClaimMap, onClear, a
       toast.success(`Updated dispo on ${updated} lead${updated === 1 ? "" : "s"}`);
       invalidate();
       setDispoVal("");
+      setPendingPremiumDispo(null);
+      setPremiumAmount("");
       onClear();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed to update dispo"),
   });
+
+  const handleDispoSelect = (v: string) => {
+    const d = v as Dispo;
+    setDispoVal(v);
+    if (d === "follow_up") {
+      toast.error("Use the Follow-up button to bulk-set a follow-up date.");
+      setDispoVal("");
+      return;
+    }
+    if (d === "x_date") {
+      toast.error("Open a lead to set an X-date — it requires a specific renewal date.");
+      setDispoVal("");
+      return;
+    }
+    if (dispoRequiresPremium(d)) {
+      setPendingPremiumDispo(d);
+      setPremiumAmount("");
+      return;
+    }
+    dispoM.mutate({ d });
+  };
 
   const reassignM = useMutation({
     mutationFn: (newAgent: string) => {
@@ -254,7 +284,7 @@ export function BulkActionBar({ table, selectedIds, selectedClaimMap, onClear, a
       <Button size="sm" variant="outline" onClick={startRelease} disabled={releaseM.isPending}>
         Release
       </Button>
-      <Select value={dispoVal} onValueChange={(v) => { setDispoVal(v); dispoM.mutate(v as Dispo); }}>
+      <Select value={dispoVal} onValueChange={handleDispoSelect}>
         <SelectTrigger className="h-8 w-40"><SelectValue placeholder="Change dispo…" /></SelectTrigger>
         <SelectContent>
           {dispoOptions.map((d) => <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>)}
@@ -344,6 +374,63 @@ export function BulkActionBar({ table, selectedIds, selectedClaimMap, onClear, a
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Yes, release all
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog
+        open={pendingPremiumDispo !== null}
+        onOpenChange={(o) => {
+          if (!o) {
+            setPendingPremiumDispo(null);
+            setDispoVal("");
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Enter Premium Amount</AlertDialogTitle>
+            <AlertDialogDescription>
+              The <strong>{dispoOptions.find((o) => o.value === pendingPremiumDispo)?.label ?? pendingPremiumDispo}</strong> disposition requires a valid premium amount.
+              This premium will be applied to all {selectedIds.length} selected leads.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-4">
+            <Label>Premium ($)</Label>
+            <Input 
+              type="number" 
+              placeholder="0" 
+              value={premiumAmount} 
+              onChange={(e) => setPremiumAmount(e.target.value)} 
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  const n = Number(premiumAmount);
+                  if (n > 0) {
+                    dispoM.mutate({ d: pendingPremiumDispo!, premium: n });
+                  } else {
+                    toast.error("Please enter a valid premium amount greater than 0");
+                  }
+                }
+              }}
+              autoFocus 
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                const n = Number(premiumAmount);
+                if (!premiumAmount || isNaN(n) || n <= 0) {
+                  e.preventDefault();
+                  toast.error("Please enter a valid premium amount greater than 0");
+                  return;
+                }
+                dispoM.mutate({ d: pendingPremiumDispo!, premium: n });
+              }}
+              disabled={dispoM.isPending}
+            >
+              Save Dispo
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
